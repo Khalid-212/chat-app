@@ -45,7 +45,7 @@ export default function App() {
   // Initialize Socket
   useEffect(() => {
     if (user) {
-      const newSocket = io("http://localhost:3000", {
+      const newSocket = io(API_URL, {
         query: { userId: user.id },
       });
 
