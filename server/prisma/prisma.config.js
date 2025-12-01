@@ -7,5 +7,7 @@ export default defineConfig({
         // seed: "tsx prisma/seed.ts",
         path: "prisma/migrations",
     },
-    earlyAccess: true,
+    datasource: {
+        url: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/chat-app",
+    },
 });
