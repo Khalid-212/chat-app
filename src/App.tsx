@@ -17,12 +17,14 @@ export default function App() {
   // Global State
   const {
     user,
+    token,
     selectedUser,
     messages,
     users,
     typingUsers,
     onlineUsers,
     setUser,
+    setToken,
     setSelectedUser,
     setMessages,
     addMessage,
@@ -37,7 +39,10 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState("");
   const [socket, setSocket] = useState<Socket | null>(null);
   const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [isSignup, setIsSignup] = useState(false);
+  const [error, setError] = useState("");
 
   // Typing timeout ref
   const typingTimeoutRef = useRef<number | null>(null);
@@ -108,38 +113,89 @@ export default function App() {
 
   // Fetch Users
   useEffect(() => {
-    if (user) {
-      fetch(`${API_URL}/api/users`)
-        .then((res) => res.json())
-        .then((data) => setUsers(data.filter((u: any) => u.id !== user.id)));
+    if (user && token) {
+      fetch(`${API_URL}/api/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch users");
+          return res.json();
+        })
+        .then((data) => setUsers(data))
+        .catch((err) => console.error("Error fetching users:", err));
     }
-  }, [user, setUsers]);
+  }, [user, token, setUsers]);
 
   // Fetch Chat History
   useEffect(() => {
-    if (user && selectedUser) {
-      fetch(`${API_URL}/api/messages/${user.id}/${selectedUser.id}`)
-        .then((res) => res.json())
-        .then((data) => setMessages(data));
+    if (user && selectedUser && token) {
+      fetch(`${API_URL}/api/messages/${selectedUser.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch messages");
+          return res.json();
+        })
+        .then((data) => setMessages(data))
+        .catch((err) => console.error("Error fetching messages:", err));
     }
-  }, [user, selectedUser, setMessages]);
+  }, [user, selectedUser, token, setMessages]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
+    if (!emailInput || !passwordInput) {
+      setError("Email and password are required");
+      return;
+    }
+
+    if (isSignup && !nameInput) {
+      setError("Name is required for signup");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const endpoint = isSignup ? "/api/auth/signup" : "/api/auth/login";
+      const body = isSignup
+        ? {
+            email: emailInput,
+            password: passwordInput,
+            name: nameInput,
+            picture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+              nameInput || emailInput
+            }`,
+          }
+        : {
+            email: emailInput,
+            password: passwordInput,
+          };
+
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: emailInput,
-          name: nameInput,
-          picture: `https://api.dicebear.com/7.x/avataaars/svg?seed=${nameInput}`,
-        }),
+        body: JSON.stringify(body),
       });
+
       const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Authentication failed");
+        return;
+      }
+
       setUser(data.user);
+      setToken(data.token);
+      setEmailInput("");
+      setPasswordInput("");
+      setNameInput("");
     } catch (error) {
-      console.error("Login failed", error);
+      console.error("Auth failed", error);
+      setError("Network error. Please try again.");
     }
   };
 
@@ -187,11 +243,16 @@ export default function App() {
         <Card className="w-full max-w-md border-2 border-black rounded-none shadow-sm">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-semibold tracking-tight">
-              Join Chat
+              {isSignup ? "Create Account" : "Login"}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleAuth} className="space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border-2 border-red-500 text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
                   Email
@@ -207,22 +268,55 @@ export default function App() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium">
-                  Name
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
                 </Label>
                 <Input
-                  id="name"
-                  type="text"
+                  id="password"
+                  type="password"
                   className="border-2 border-black rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  placeholder="Display Name"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter your password"
                   required
                 />
               </div>
-              <Button className="w-full rounded-none border-2 border-black bg-black text-white hover:bg-black/90 transition-colors">
-                Enter
+              {isSignup && (
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-medium">
+                    Display Name
+                  </Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    className="border-2 border-black rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    placeholder="Your display name"
+                    required
+                  />
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full rounded-none border-2 border-black bg-black text-white hover:bg-black/90 transition-colors"
+              >
+                {isSignup ? "Sign Up" : "Login"}
               </Button>
+              <div className="text-center text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignup(!isSignup);
+                    setError("");
+                  }}
+                  className="text-black underline hover:no-underline"
+                >
+                  {isSignup
+                    ? "Already have an account? Login"
+                    : "Don't have an account? Sign up"}
+                </button>
+              </div>
             </form>
           </CardContent>
         </Card>

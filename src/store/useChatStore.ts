@@ -19,6 +19,7 @@ export type Message = {
 
 interface ChatState {
   user: User | null;
+  token: string | null;
   selectedUser: User | null;
   messages: Message[];
   users: User[];
@@ -26,6 +27,7 @@ interface ChatState {
   onlineUsers: Set<string>; // Set of user IDs who are online
 
   setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
   setSelectedUser: (user: User | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
@@ -40,6 +42,7 @@ export const useChatStore = create<ChatState>()(
   persist(
     (set) => ({
       user: null,
+      token: null,
       selectedUser: null,
       messages: [],
       users: [],
@@ -47,6 +50,8 @@ export const useChatStore = create<ChatState>()(
       onlineUsers: new Set(),
 
       setUser: (user) => set({ user }),
+
+      setToken: (token) => set({ token }),
 
       setSelectedUser: (selectedUser) => set({ selectedUser }),
 
@@ -81,11 +86,14 @@ export const useChatStore = create<ChatState>()(
           return { onlineUsers: newOnlineUsers };
         }),
 
-      logout: () => set({ user: null, selectedUser: null, messages: [], onlineUsers: new Set() }),
+      logout: () => {
+        localStorage.removeItem("chat-storage");
+        set({ user: null, token: null, selectedUser: null, messages: [], onlineUsers: new Set() });
+      },
     }),
     {
       name: "chat-storage", // unique name
-      partialize: (state) => ({ user: state.user }), // Only persist the user session
+      partialize: (state) => ({ user: state.user, token: state.token }), // Persist user and token
     }
   )
 );
