@@ -7,5 +7,4 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "exclude": ["prisma/prisma.config.ts"]
 }
