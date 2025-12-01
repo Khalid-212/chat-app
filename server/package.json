@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch server.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "prisma generate && tsc && prisma migrate deploy",
+    "build": "prisma generate && tsc && prisma migrate deploy --config=./prisma/prisma.config.ts",
     "postinstall": "prisma generate"
   },
   "keywords": [],
