@@ -11,7 +11,7 @@ import { Send } from "lucide-react";
 import { useChatStore, type Message } from "@/store/useChatStore";
 
 // API Helper
-const API_URL = "http://localhost:3000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function App() {
   // Global State
