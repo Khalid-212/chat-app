@@ -109,7 +109,7 @@ export default function App() {
   // Fetch Users
   useEffect(() => {
     if (user) {
-      fetch(`${API_URL}/users`)
+      fetch(`${API_URL}/api/users`)
         .then((res) => res.json())
         .then((data) => setUsers(data.filter((u: any) => u.id !== user.id)));
     }
@@ -118,7 +118,7 @@ export default function App() {
   // Fetch Chat History
   useEffect(() => {
     if (user && selectedUser) {
-      fetch(`${API_URL}/messages/${user.id}/${selectedUser.id}`)
+      fetch(`${API_URL}/api/messages/${user.id}/${selectedUser.id}`)
         .then((res) => res.json())
         .then((data) => setMessages(data));
     }
@@ -127,7 +127,7 @@ export default function App() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
