@@ -40,7 +40,7 @@ export default function App() {
   const [nameInput, setNameInput] = useState("");
 
   // Typing timeout ref
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
 
   // Initialize Socket
   useEffect(() => {
