@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useChatStore, type Message } from "@/store/useChatStore";
 
@@ -63,7 +63,9 @@ export function useSocket() {
         setOnlineUsers(userIds);
       });
 
-      setSocket(newSocket);
+      setTimeout(() => {
+        setSocket(newSocket);
+      }, 1000);
 
       return () => {
         newSocket.disconnect();
@@ -80,4 +82,3 @@ export function useSocket() {
 
   return socket;
 }
-
