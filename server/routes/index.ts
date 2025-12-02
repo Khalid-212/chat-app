@@ -6,6 +6,11 @@ import { authenticate } from "../middleware/auth";
 
 const router = Router();
 
+// Health check (public)
+router.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 // Auth routes (public)
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);

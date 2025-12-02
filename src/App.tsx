@@ -43,9 +43,32 @@ export default function App() {
   const [nameInput, setNameInput] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
+  const [backendStatus, setBackendStatus] = useState<"online" | "offline" | "checking">("checking");
 
   // Typing timeout ref
   const typingTimeoutRef = useRef<number | null>(null);
+
+  // Check backend status
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/health`, {
+          method: "GET",
+        });
+        setBackendStatus(res.ok ? "online" : "offline");
+      } catch {
+        setBackendStatus("offline");
+      }
+    };
+
+    // Check immediately
+    checkBackend();
+
+    // Check every 30 seconds
+    const interval = setInterval(checkBackend, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Initialize Socket
   useEffect(() => {
@@ -318,6 +341,26 @@ export default function App() {
                 </button>
               </div>
             </form>
+            <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-400">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    backendStatus === "online"
+                      ? "bg-green-500"
+                      : backendStatus === "offline"
+                      ? "bg-red-500"
+                      : "bg-yellow-500 animate-pulse"
+                  }`}
+                />
+                <span>
+                  {backendStatus === "online"
+                    ? "Backend online"
+                    : backendStatus === "offline"
+                    ? "Backend offline"
+                    : "Checking..."}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -410,6 +453,26 @@ export default function App() {
             ))}
           </div>
         </ScrollArea>
+        <div className="border-t border-gray-200 p-2">
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-400">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                backendStatus === "online"
+                  ? "bg-green-500"
+                  : backendStatus === "offline"
+                  ? "bg-red-500"
+                  : "bg-yellow-500 animate-pulse"
+              }`}
+            />
+            <span>
+              {backendStatus === "online"
+                ? "Backend online"
+                : backendStatus === "offline"
+                ? "Backend offline"
+                : "Checking..."}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Chat Area */}
