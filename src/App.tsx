@@ -316,8 +316,8 @@ export default function App() {
 
         const data = await res.json();
         if (res.ok) {
+          // Add user message immediately (AI response will come via socket)
           addMessage(data.userMessage);
-          addMessage(data.aiMessage);
           setInputMessage("");
         } else {
           setError(data.error || "Failed to send message to AI");
@@ -673,6 +673,7 @@ export default function App() {
             </div>
 
             {/* Messages */}
+            {/* <div>fwea</div> */}
             <ScrollArea
               className="flex-1 bg-[#fafafa] p-6"
               style={{

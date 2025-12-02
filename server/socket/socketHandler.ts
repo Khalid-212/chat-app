@@ -1,9 +1,15 @@
 import { Server, Socket } from "socket.io";
 import { prisma } from "../config/db";
 
-const onlineUsers = new Map<string, string>(); // userId -> socketId
+export const onlineUsers = new Map<string, string>(); // userId -> socketId
+let _ioInstance: Server | null = null;
+
+export const getIoInstance = (): Server | null => {
+  return _ioInstance;
+};
 
 export const setupSocket = (io: Server) => {
+  _ioInstance = io;
   io.on("connection", (socket: Socket) => {
     const userId = socket.handshake.query.userId as string;
 

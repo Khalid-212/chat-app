@@ -13,9 +13,23 @@ CREATE TABLE IF NOT EXISTS "AIBot" (
 -- AlterTable: Add aiBotId to Message
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "aiBotId" TEXT;
 
--- AddForeignKey
-ALTER TABLE "AIBot" ADD CONSTRAINT "AIBot_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (with IF NOT EXISTS check)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'AIBot_creatorId_fkey'
+    ) THEN
+        ALTER TABLE "AIBot" ADD CONSTRAINT "AIBot_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "Message" ADD CONSTRAINT "Message_aiBotId_fkey" FOREIGN KEY ("aiBotId") REFERENCES "AIBot"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- AddForeignKey (with IF NOT EXISTS check)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'Message_aiBotId_fkey'
+    ) THEN
+        ALTER TABLE "Message" ADD CONSTRAINT "Message_aiBotId_fkey" FOREIGN KEY ("aiBotId") REFERENCES "AIBot"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
 
