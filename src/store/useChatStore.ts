@@ -7,6 +7,7 @@ export type User = {
   name: string | null;
   email: string;
   picture: string | null;
+  isAI?: boolean;
 };
 
 export type Message = {
@@ -14,6 +15,8 @@ export type Message = {
   content: string;
   senderId: string;
   receiverId: string;
+  aiBotId?: string | null;
+  isFromAI?: boolean;
   createdAt: string;
 };
 

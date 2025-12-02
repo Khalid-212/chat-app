@@ -44,6 +44,10 @@ export default function App() {
   const [isSignup, setIsSignup] = useState(false);
   const [error, setError] = useState("");
   const [backendStatus, setBackendStatus] = useState<"online" | "offline" | "checking">("checking");
+  const [showCreateAI, setShowCreateAI] = useState(false);
+  const [aiName, setAiName] = useState("");
+  const [aiDescription, setAiDescription] = useState("");
+  const [isCreatingAI, setIsCreatingAI] = useState(false);
 
   // Typing timeout ref
   const typingTimeoutRef = useRef<number | null>(null);
@@ -189,17 +193,34 @@ export default function App() {
   // Fetch Chat History
   useEffect(() => {
     if (user && selectedUser && token) {
-      fetch(`${API_URL}/api/messages/${selectedUser.id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch messages");
-          return res.json();
+      // For AI bots, messages are already fetched via the chat endpoint
+      // For regular users, fetch from messages endpoint
+      if (!selectedUser.isAI) {
+        fetch(`${API_URL}/api/messages/${selectedUser.id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         })
-        .then((data) => setMessages(data))
-        .catch((err) => console.error("Error fetching messages:", err));
+          .then((res) => {
+            if (!res.ok) throw new Error("Failed to fetch messages");
+            return res.json();
+          })
+          .then((data) => setMessages(data))
+          .catch((err) => console.error("Error fetching messages:", err));
+      } else {
+        // For AI, fetch messages with aiBotId filter
+        fetch(`${API_URL}/api/messages/${selectedUser.id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error("Failed to fetch messages");
+            return res.json();
+          })
+          .then((data) => setMessages(data))
+          .catch((err) => console.error("Error fetching AI messages:", err));
+      }
     }
   }, [user, selectedUser, token, setMessages]);
 
@@ -273,18 +294,101 @@ export default function App() {
     }, 1000);
   };
 
-  const sendMessage = (e: React.FormEvent) => {
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!socket || !selectedUser || !inputMessage.trim()) return;
+    if (!selectedUser || !inputMessage.trim() || !user) return;
 
-    socket.emit("send_message", {
-      senderId: user?.id,
-      receiverId: selectedUser.id,
-      content: inputMessage,
-    });
+    // Check if selected user is an AI
+    if (selectedUser.isAI) {
+      // Send to AI API
+      try {
+        const res = await fetch(`${API_URL}/api/ai/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            aiBotId: selectedUser.id,
+            message: inputMessage,
+          }),
+        });
 
-    socket.emit("typing_stop", { receiverId: selectedUser.id });
-    setInputMessage("");
+        const data = await res.json();
+        if (res.ok) {
+          addMessage(data.userMessage);
+          addMessage(data.aiMessage);
+          setInputMessage("");
+        } else {
+          setError(data.error || "Failed to send message to AI");
+        }
+      } catch (error) {
+        console.error("Error sending message to AI:", error);
+        setError("Failed to send message to AI");
+      }
+    } else {
+      // Send to regular user via socket
+      if (!socket) return;
+
+      socket.emit("send_message", {
+        senderId: user.id,
+        receiverId: selectedUser.id,
+        content: inputMessage,
+      });
+
+      socket.emit("typing_stop", { receiverId: selectedUser.id });
+      setInputMessage("");
+    }
+  };
+
+  const handleCreateAI = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiName || !aiDescription) {
+      setError("Name and description are required");
+      return;
+    }
+
+    setIsCreatingAI(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/ai/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: aiName,
+          description: aiDescription,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Refresh users list to include new AI
+        const usersRes = await fetch(`${API_URL}/api/users`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const usersData = await usersRes.json();
+        setUsers(usersData.filter((u: any) => u.id !== user?.id));
+
+        setShowCreateAI(false);
+        setAiName("");
+        setAiDescription("");
+        setError("");
+      } else {
+        setError(data.error || "Failed to create AI bot");
+      }
+    } catch (error) {
+      console.error("Error creating AI bot:", error);
+      setError("Failed to create AI bot");
+    } finally {
+      setIsCreatingAI(false);
+    }
   };
 
   if (!user) {
@@ -445,9 +549,18 @@ export default function App() {
         </div>
 
         <ScrollArea className="flex-1 p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 px-1">
-            Contacts
-          </h3>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Contacts
+            </h3>
+            <Button
+              onClick={() => setShowCreateAI(true)}
+              size="sm"
+              className="h-6 px-2 text-[10px] rounded-none border border-black bg-white text-black hover:bg-black hover:text-white transition-colors"
+            >
+              + AI
+            </Button>
+          </div>
           <div className="space-y-2">
             {users.map((u) => (
               <div
@@ -473,14 +586,21 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="font-medium text-sm truncate">{u.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-sm truncate">{u.name}</span>
+                    {u.isAI && (
+                      <Badge className="text-[8px] px-1 py-0 h-3 bg-purple-500 text-white border-0 rounded-none">
+                        AI
+                      </Badge>
+                    )}
+                  </div>
                   {typingUsers.has(u.id) ? (
                     <span className="text-[10px] animate-pulse text-gray-500 font-medium">
                       typing...
                     </span>
                   ) : (
                     <span className="text-[10px] text-gray-400">
-                      {onlineUsers.has(u.id) ? "Online" : "Offline"}
+                      {u.isAI ? "AI Assistant" : onlineUsers.has(u.id) ? "Online" : "Offline"}
                     </span>
                   )}
                 </div>
@@ -529,9 +649,16 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex flex-col">
-                  <h2 className="text-base font-semibold leading-none">
-                    {selectedUser.name}
-                  </h2>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-semibold leading-none">
+                      {selectedUser.name}
+                    </h2>
+                    {selectedUser.isAI && (
+                      <Badge className="text-[8px] px-1 py-0 h-3 bg-purple-500 text-white border-0 rounded-none">
+                        AI
+                      </Badge>
+                    )}
+                  </div>
                   {typingUsers.has(selectedUser.id) ? (
                     <span className="text-xs font-medium text-gray-500 animate-pulse mt-0.5">
                       typing...
@@ -556,7 +683,10 @@ export default function App() {
             >
               <div className="space-y-3">
                 {messages.map((msg) => {
-                  const isMe = msg.senderId === user.id;
+                  // For AI messages, check isFromAI flag; for regular messages, check senderId
+                  const isMe = selectedUser?.isAI 
+                    ? !msg.isFromAI 
+                    : msg.senderId === user.id;
                   return (
                     <div
                       key={msg.id}
@@ -631,6 +761,77 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Create AI Modal */}
+      {showCreateAI && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md border-2 border-black rounded-none shadow-sm bg-white">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-semibold tracking-tight">
+                Create AI Bot
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateAI} className="space-y-4">
+                {error && (
+                  <div className="p-3 bg-red-50 border-2 border-red-500 text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="ai-name" className="text-sm font-medium">
+                    AI Name
+                  </Label>
+                  <Input
+                    id="ai-name"
+                    type="text"
+                    className="border-2 border-black rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    value={aiName}
+                    onChange={(e) => setAiName(e.target.value)}
+                    placeholder="e.g., Funny Roasting Bot"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-description" className="text-sm font-medium">
+                    Description
+                  </Label>
+                  <textarea
+                    id="ai-description"
+                    className="w-full min-h-[100px] border-2 border-black rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 p-2 resize-none"
+                    value={aiDescription}
+                    onChange={(e) => setAiDescription(e.target.value)}
+                    placeholder="Describe the AI's personality and behavior (e.g., 'A funny roasting bot that makes witty jokes')"
+                    required
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateAI(false);
+                      setAiName("");
+                      setAiDescription("");
+                      setError("");
+                    }}
+                    variant="outline"
+                    className="flex-1 rounded-none border-2 border-black bg-white text-black hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isCreatingAI}
+                    className="flex-1 rounded-none border-2 border-black bg-black text-white hover:bg-black/90 transition-colors"
+                  >
+                    {isCreatingAI ? "Creating..." : "Create"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

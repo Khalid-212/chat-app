@@ -16,6 +16,7 @@ model User {
 
     sentMessages     Message[] @relation("SentMessages")
     receivedMessages Message[] @relation("ReceivedMessages")
+    createdAIBots    AIBot[]   @relation("CreatedAIBots")
 }
 
 model Message {
@@ -23,8 +24,23 @@ model Message {
     content    String
     senderId   String
     receiverId String
+    aiBotId    String?
+    isFromAI   Boolean  @default(false)
     createdAt  DateTime @default(now())
 
-    sender   User @relation("SentMessages", fields: [senderId], references: [id])
-    receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+    sender   User   @relation("SentMessages", fields: [senderId], references: [id])
+    receiver User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+    aiBot    AIBot? @relation("AIMessages", fields: [aiBotId], references: [id])
+}
+
+model AIBot {
+    id              String   @id @default(uuid())
+    name            String
+    description     String
+    systemInstruction String
+    creatorId       String
+    createdAt       DateTime @default(now())
+
+    creator         User     @relation("CreatedAIBots", fields: [creatorId], references: [id])
+    messages        Message[] @relation("AIMessages")
 }

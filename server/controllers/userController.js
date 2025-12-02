@@ -14,7 +14,26 @@ export const getUsers = async (req, res) => {
                 createdAt: true,
             },
         });
-        res.json(users);
+        // Get user's AI bots
+        const aiBots = await prisma.aIBot.findMany({
+            where: { creatorId: userId },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+                createdAt: true,
+            },
+        });
+        // Format AI bots as users with a flag
+        const aiBotsAsUsers = aiBots.map((bot) => ({
+            id: bot.id,
+            email: `ai-${bot.id}@chat-app.ai`,
+            name: bot.name,
+            picture: null,
+            createdAt: bot.createdAt,
+            isAI: true,
+        }));
+        res.json([...users, ...aiBotsAsUsers]);
     }
     catch (error) {
         console.error("Get users error:", error);
