@@ -48,26 +48,61 @@ export default function App() {
   // Typing timeout ref
   const typingTimeoutRef = useRef<number | null>(null);
 
-  // Check backend status
+  // Check backend status with adaptive intervals
   useEffect(() => {
+    let timeoutId: number | null = null;
+    let isMounted = true;
+
     const checkBackend = async () => {
+      if (!isMounted) return;
+
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
         const res = await fetch(`${API_URL}/api/health`, {
           method: "GET",
+          signal: controller.signal,
         });
-        setBackendStatus(res.ok ? "online" : "offline");
-      } catch {
+        
+        clearTimeout(timeout);
+        
+        if (!isMounted) return;
+        
+        const newStatus = res.ok ? "online" : "offline";
+        setBackendStatus(newStatus);
+
+        // Schedule next check based on status
+        // 2 seconds if offline, 5 minutes (300000ms) if online
+        const delay = newStatus === "offline" ? 2000 : 300000;
+        
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            checkBackend();
+          }
+        }, delay);
+      } catch (error) {
+        if (!isMounted) return;
+        
         setBackendStatus("offline");
+        
+        // If offline, check again in 2 seconds
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            checkBackend();
+          }
+        }, 2000);
       }
     };
 
-    // Check immediately
+    // Initial check
+    setBackendStatus("checking");
     checkBackend();
 
-    // Check every 30 seconds
-    const interval = setInterval(checkBackend, 30000);
-
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
   }, []);
 
   // Initialize Socket
