@@ -10,16 +10,13 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // Allow all for dev, restrict in prod
+        origin: "*",
         methods: ["GET", "POST"],
     },
 });
-// Middleware
 app.use(cors());
 app.use(express.json());
-// API Routes
 app.use("/api", routes);
-// Socket Setup
 setupSocket(io);
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {

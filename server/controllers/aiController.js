@@ -1,33 +1,14 @@
+import "dotenv/config";
 import { prisma } from "../config/db";
-import { GoogleGenAI } from "@google/genai";
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-// Convert user description to system instruction
-async function generateSystemInstruction(description) {
-    try {
-        const prompt = `Convert this short description into a detailed, comprehensive system instruction for an AI chatbot. The system instruction should define the AI's personality, behavior, communication style, and any specific guidelines it should follow.
-
-User description: "${description}"
-
-Generate a detailed system instruction that:
-1. Defines the AI's personality and character
-2. Specifies how it should communicate (tone, style, formality)
-3. Outlines its behavior and response patterns
-4. Includes any specific rules or guidelines
-5. Makes it clear this is the AI's core identity
-
-Return only the system instruction text, no additional explanation or formatting.`;
-        const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: prompt,
-        });
-        return response.text || `You are an AI assistant. ${description}.`;
+import { getIoInstance, onlineUsers } from "../socket/socketHandler";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const getGeminiApiKey = () => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error("GEMINI_API_KEY environment variable is not set");
     }
-    catch (error) {
-        console.error("Error generating system instruction:", error);
-        return `You are an AI assistant. ${description}. Be helpful, friendly, and engaging in your responses.`;
-    }
-}
-// Create AI bot
+    return apiKey;
+};
 export const createAIBot = async (req, res) => {
     try {
         const userId = req.userId;
@@ -36,14 +17,11 @@ export const createAIBot = async (req, res) => {
             res.status(400).json({ error: "Name and description are required" });
             return;
         }
-        // Generate system instruction from description
-        const systemInstruction = await generateSystemInstruction(description);
-        // Create AI bot
         const aiBot = await prisma.aIBot.create({
             data: {
                 name,
                 description,
-                systemInstruction,
+                systemInstruction: `You are an AI assistant. you should have the following personality: ${description}`,
                 creatorId: userId,
             },
         });
@@ -56,7 +34,6 @@ export const createAIBot = async (req, res) => {
             .json({ error: "Failed to create AI bot", details: String(error) });
     }
 };
-// Get user's AI bots
 export const getAIBots = async (req, res) => {
     try {
         const userId = req.userId;
@@ -78,12 +55,11 @@ export const getAIBots = async (req, res) => {
             .json({ error: "Failed to get AI bots", details: String(error) });
     }
 };
-// Chat with AI
 export const chatWithAI = async (req, res) => {
     try {
         const userId = req.userId;
         const { aiBotId, message } = req.body;
-        if (!aiBotId || !message) {
+        if (!aiBotId || !message || typeof message !== "string") {
             res.status(400).json({ error: "AI bot ID and message are required" });
             return;
         }
@@ -95,39 +71,7 @@ export const chatWithAI = async (req, res) => {
             res.status(404).json({ error: "AI bot not found" });
             return;
         }
-        // Get chat history
-        const history = await prisma.message.findMany({
-            where: {
-                OR: [
-                    { senderId: userId, aiBotId: aiBotId },
-                    { aiBotId: aiBotId, receiverId: userId },
-                ],
-            },
-            orderBy: { createdAt: "asc" },
-            take: 20, // Last 20 messages for context
-        });
-        // Build conversation history for Gemini (format might differ slightly for new SDK, sticking to text block for simplicity or checking docs if needed)
-        // The new SDK handles contents as string or Part object.
-        // We can construct a multi-turn prompt manually or check if history is supported directly in generateContent (it's usually stateless in generateContent).
-        // But the new SDK might have startChat equivalent. Let's check.
-        // Actually, the user example just showed generateContent. Let's construct a text prompt to be safe and simple.
-        let prompt = `System Instruction: ${aiBot.systemInstruction}\n\n`;
-        if (history.length > 0) {
-            prompt += "Conversation History:\n";
-            history.forEach((msg) => {
-                prompt += `${msg.isFromAI ? "AI" : "User"}: ${msg.content}\n`;
-            });
-        }
-        prompt += `\nUser: ${message}\nAI:`;
-        const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: prompt,
-        });
-        const aiResponse = response.text || "";
-        if (!aiResponse) {
-            throw new Error("Empty response from AI");
-        }
-        // Save user message (for AI conversations, we use userId for both sender/receiver)
+        // Save user message immediately
         const userMessage = await prisma.message.create({
             data: {
                 content: message,
@@ -137,25 +81,105 @@ export const chatWithAI = async (req, res) => {
                 isFromAI: false,
             },
         });
-        // Save AI response (marked with isFromAI flag)
-        const aiMessage = await prisma.message.create({
-            data: {
-                content: aiResponse,
-                senderId: userId, // Using user ID as placeholder (AI bots aren't users)
-                receiverId: userId,
-                aiBotId: aiBotId,
-                isFromAI: true, // Flag to identify AI messages
-            },
-        });
-        res.json({
-            userMessage,
-            aiMessage,
-        });
+        // Return user message immediately
+        res.json({ userMessage });
+        // Show typing indicator for AI bot
+        const ioInstance = getIoInstance();
+        if (ioInstance) {
+            const userSocketId = onlineUsers.get(userId);
+            if (userSocketId) {
+                ioInstance.to(userSocketId).emit("user_typing", { userId: aiBotId });
+            }
+        }
+        // Process AI response asynchronously
+        (async () => {
+            try {
+                const apiKey = getGeminiApiKey();
+                if (!apiKey) {
+                    throw new Error("GEMINI_API_KEY is not configured");
+                }
+                const response = await fetch(GEMINI_API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": apiKey,
+                    },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    {
+                                        text: message,
+                                    },
+                                ],
+                            },
+                        ],
+                        systemInstruction: {
+                            parts: [
+                                {
+                                    text: aiBot.systemInstruction,
+                                },
+                            ],
+                        },
+                    }),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+                }
+                const data = await response.json();
+                const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                if (!aiResponse) {
+                    throw new Error("Empty response from AI");
+                }
+                // Stop typing indicator
+                const ioInstance = getIoInstance();
+                if (ioInstance) {
+                    const userSocketId = onlineUsers.get(userId);
+                    if (userSocketId) {
+                        ioInstance
+                            .to(userSocketId)
+                            .emit("user_stopped_typing", { userId: aiBotId });
+                    }
+                }
+                // Save AI response
+                const aiMessage = await prisma.message.create({
+                    data: {
+                        content: aiResponse,
+                        senderId: userId,
+                        receiverId: userId,
+                        aiBotId: aiBotId,
+                        isFromAI: true,
+                    },
+                });
+                // Send AI message via socket
+                if (ioInstance) {
+                    const userSocketId = onlineUsers.get(userId);
+                    if (userSocketId) {
+                        ioInstance.to(userSocketId).emit("receive_message", aiMessage);
+                    }
+                }
+            }
+            catch (error) {
+                console.error("Error processing AI response:", error);
+                // Stop typing indicator on error
+                const ioInstance = getIoInstance();
+                if (ioInstance) {
+                    const userSocketId = onlineUsers.get(userId);
+                    if (userSocketId) {
+                        ioInstance
+                            .to(userSocketId)
+                            .emit("user_stopped_typing", { userId: aiBotId });
+                    }
+                }
+            }
+        })();
     }
     catch (error) {
-        console.error("Chat with AI error:", error);
+        console.error("Error chatting with AI:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         res
             .status(500)
-            .json({ error: "Failed to chat with AI", details: String(error) });
+            .json({ error: "Failed to chat with AI", details: errorMessage });
     }
 };

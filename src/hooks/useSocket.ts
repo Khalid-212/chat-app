@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useChatStore, type Message } from "@/store/useChatStore";
+import notificationMp3 from '../assets/notification.mp3';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -12,6 +13,7 @@ export function useSocket() {
     setTypingUser,
     updateUserStatus,
     setOnlineUsers,
+    incrementUnread,
   } = useChatStore();
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -26,6 +28,14 @@ export function useSocket() {
       });
 
       newSocket.on("receive_message", (message: Message) => {
+        const effectiveSenderId = message.isFromAI ? message.aiBotId! : message.senderId;
+        if (effectiveSenderId !== user.id) {
+          if (selectedUser?.id !== effectiveSenderId) {
+            incrementUnread(effectiveSenderId);
+            const audio = new Audio(notificationMp3);
+            audio.play();
+          }
+        }
         if (
           selectedUser &&
           (message.senderId === selectedUser.id || message.senderId === user.id)
@@ -78,6 +88,7 @@ export function useSocket() {
     setTypingUser,
     updateUserStatus,
     setOnlineUsers,
+    incrementUnread,
   ]);
 
   return socket;

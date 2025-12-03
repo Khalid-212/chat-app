@@ -19,6 +19,7 @@ export function Sidebar({ onShowCreateAI }: SidebarProps) {
     onlineUsers,
     setSelectedUser,
     logout,
+    unreadCounts,
   } = useChatStore();
   const backendStatus = useBackendStatus();
 
@@ -91,6 +92,11 @@ export function Sidebar({ onShowCreateAI }: SidebarProps) {
                 </Avatar>
                 {onlineUsers.has(u.id) && (
                   <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-white" />
+                )}
+                {(unreadCounts[u.id] ?? 0) > 0 && (
+                  <Badge className="absolute top-0 -right-1 bg-red-500 text-white rounded-full px-1.5 py-0 text-[10px] min-w-5 flex items-center justify-center">
+                    {unreadCounts[u.id]}
+                  </Badge>
                 )}
               </div>
               <div className="flex flex-col min-w-0 flex-1">

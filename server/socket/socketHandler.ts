@@ -1,7 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { prisma } from "../config/db";
 
-export const onlineUsers = new Map<string, string>(); // userId -> socketId
+export const onlineUsers = new Map<string, string>();
 let _ioInstance: Server | null = null;
 
 export const getIoInstance = (): Server | null => {

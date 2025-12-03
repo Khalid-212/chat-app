@@ -28,6 +28,7 @@ interface ChatState {
   users: User[];
   typingUsers: Set<string>; // Set of user IDs who are typing
   onlineUsers: Set<string>; // Set of user IDs who are online
+  unreadCounts: Record<string, number>;
 
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
@@ -39,6 +40,7 @@ interface ChatState {
   setOnlineUsers: (userIds: string[]) => void;
   updateUserStatus: (userId: string, status: 'online' | 'offline') => void;
   logout: () => void;
+  incrementUnread: (senderId: string) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -51,12 +53,19 @@ export const useChatStore = create<ChatState>()(
       users: [],
       typingUsers: new Set(),
       onlineUsers: new Set(),
+      unreadCounts: {},
 
       setUser: (user) => set({ user }),
 
       setToken: (token) => set({ token }),
 
-      setSelectedUser: (selectedUser) => set({ selectedUser }),
+      setSelectedUser: (selectedUser) => set((state) => {
+        const newState = { selectedUser, unreadCounts: { ...state.unreadCounts } };
+        if (selectedUser) {
+          newState.unreadCounts[selectedUser.id] = 0;
+        }
+        return newState;
+      }),
 
       setMessages: (messages) => set({ messages }),
 
@@ -88,6 +97,13 @@ export const useChatStore = create<ChatState>()(
           }
           return { onlineUsers: newOnlineUsers };
         }),
+
+      incrementUnread: (senderId) => set((state) => ({
+        unreadCounts: {
+          ...state.unreadCounts,
+          [senderId]: (state.unreadCounts[senderId] || 0) + 1
+        }
+      })),
 
       logout: () => {
         localStorage.removeItem("chat-storage");

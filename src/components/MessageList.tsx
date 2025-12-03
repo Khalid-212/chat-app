@@ -1,9 +1,15 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatStore } from "@/store/useChatStore";
+import ReactMarkdown from "react-markdown";
+import { useRef, useEffect } from "react";
 
 export function MessageList() {
   const { messages, selectedUser, user, typingUsers } = useChatStore();
-
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isTyping = selectedUser ? typingUsers.has(selectedUser.id) : false;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, isTyping]);
   return (
     <ScrollArea
       className="h-0 flex-1 bg-[#fafafa] p-6"
@@ -28,7 +34,7 @@ export function MessageList() {
                 ${isMe ? "bg-black text-white" : "bg-white text-black"}
               `}
               >
-                {msg.content}
+                <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             </div>
           );
@@ -51,8 +57,8 @@ export function MessageList() {
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
     </ScrollArea>
   );
 }
-
